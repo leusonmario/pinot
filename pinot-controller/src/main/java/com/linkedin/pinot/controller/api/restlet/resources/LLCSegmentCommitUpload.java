@@ -21,7 +21,6 @@ import com.linkedin.pinot.common.restlet.swagger.HttpVerb;
 import com.linkedin.pinot.common.restlet.swagger.Paths;
 import com.linkedin.pinot.common.restlet.swagger.Summary;
 import com.linkedin.pinot.common.utils.LLCSegmentName;
-import com.linkedin.pinot.controller.helix.core.realtime.SegmentCompletionManager;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -35,18 +34,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-/**
- * A resource class that fields the segmentCommit() message (and the upload of a realtime segment)
- * from the servers. Servers go through {@link SegmentCompletionProtocol} to complete a segment and
- * one of the servers commit the segment that has been completed.
- */
-public class LLCSegmentCommit extends PinotSegmentUploadRestletResource {
-  private static Logger LOGGER = LoggerFactory.getLogger(LLCSegmentCommit.class);
+public class LLCSegmentCommitUpload extends PinotSegmentUploadRestletResource {
+  private static Logger LOGGER = LoggerFactory.getLogger(LLCSegmentCommitUpload.class);
   long _offset;
   String _segmentNameStr;
   String _instanceId;
 
-  public LLCSegmentCommit()
+  public LLCSegmentCommitUpload()
       throws IOException {
   }
 
@@ -60,22 +54,15 @@ public class LLCSegmentCommit extends PinotSegmentUploadRestletResource {
       return new StringRepresentation(SegmentCompletionProtocol.RESP_FAILED.toJsonString());
     }
     LOGGER.info("segment={} offset={} instance={} ", _segmentNameStr, _offset, _instanceId);
-    final SegmentCompletionManager segmentCompletionManager = getSegmentCompletionManager();
 
-    final SegmentCompletionProtocol.Request.Params reqParams = new SegmentCompletionProtocol.Request.Params();
-    reqParams.withInstanceId(_instanceId).withSegmentName(_segmentNameStr).withOffset(_offset);
-    SegmentCompletionProtocol.Response response = segmentCompletionManager.segmentCommitStart(reqParams, false);
-    if (response.equals(SegmentCompletionProtocol.RESP_COMMIT_CONTINUE)) {
-
-      // Get the segment and put it in the right place.
-      boolean success = uploadSegment(_instanceId, _segmentNameStr);
-
-      response = segmentCompletionManager.segmentCommitEnd(reqParams, success, false);
+    boolean success = uploadSegment(_instanceId, _segmentNameStr);
+    if (success) {
+      LOGGER.info("Uploded segment successfully");
+      return new StringRepresentation(SegmentCompletionProtocol.ControllerResponseStatus.COMMIT_SUCCESS.toString());
+    } else {
+      LOGGER.info("Failed to upload segment");
+      return new StringRepresentation(SegmentCompletionProtocol.ControllerResponseStatus.FAILED.toString());
     }
-
-    LOGGER.info("Response: instance={}  segment={} status={} offset={}", _instanceId, _segmentNameStr,
-        response.getStatus(), response.getOffset());
-    return new StringRepresentation(response.toJsonString());
   }
 
   boolean extractParams() {
@@ -143,15 +130,14 @@ public class LLCSegmentCommit extends PinotSegmentUploadRestletResource {
       LLCSegmentName segmentName = new LLCSegmentName(segmentNameStr);
       final String rawTableName = segmentName.getTableName();
       final File tableDir = new File(baseDataDir, rawTableName);
-      final File segmentFile = new File(tableDir, segmentNameStr);
+      final File segmentFile = new File(tableDir, segmentNameStr + _offset + _instanceId);
 
-      synchronized (_pinotHelixResourceManager) {
-        if (segmentFile.exists()) {
-          LOGGER.warn("Segment file {} exists. Replacing with upload from {}", segmentNameStr, instanceId);
-          FileUtils.deleteQuietly(segmentFile);
-        }
-        FileUtils.moveFile(dataFile, segmentFile);
+      // always delte if there
+      if (segmentFile.exists()) {
+        LOGGER.warn("Segment file {} exists. Replacing with upload from {}", segmentNameStr, instanceId);
+        FileUtils.deleteQuietly(segmentFile);
       }
+      FileUtils.moveFile(dataFile, segmentFile);
 
       return true;
     } catch (Exception e) {

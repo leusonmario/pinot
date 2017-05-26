@@ -94,9 +94,12 @@ public class SegmentCompletionProtocol {
   public static final String STATUS_KEY = "status";
   public static final String OFFSET_KEY = "offset";
   public static final String BUILD_TIME_KEY = "buildTimeSec";  // Sent by controller in COMMIT message
+  public static final String COMMIT_TYPE_KEY = "commitType";
 
   public static final String MSG_TYPE_CONSUMED = "segmentConsumed";
   public static final String MSG_TYPE_COMMIT = "segmentCommit";
+  public static final String MSG_TYPE_COMMIT_START = "segmentCommitStart";
+  public static final String MSG_TYPE_COMMIT_END = "segmentCommitEnd";
   public static final String MSG_TYPE_STOPPED_CONSUMING = "segmentStoppedConsuming";
   public static final String MSG_TYPE_EXTEND_BUILD_TIME = "extendBuildTime";
 
@@ -268,6 +271,7 @@ public class SegmentCompletionProtocol {
     final ControllerResponseStatus _status;
     final long _offset;
     final long _buildTimeSeconds;
+    final boolean _isSplitCommit;
 
     public Response(String jsonRespStr) {
       JSONObject jsonObject = JSONObject.parseObject(jsonRespStr);
@@ -292,12 +296,19 @@ public class SegmentCompletionProtocol {
       } else {
         _buildTimeSeconds = buildTimeObj;
       }
+
+      boolean isSplitCommit = false;
+      if (jsonObject.containsKey(COMMIT_TYPE_KEY)) {
+        isSplitCommit = true;
+      }
+      _isSplitCommit = isSplitCommit;
     }
 
     public Response(Params params) {
       _status = params.getStatus();
       _offset = params.getOffset();
       _buildTimeSeconds = params.getBuildTimeSeconds();
+      _isSplitCommit = params.getIsSplitCommit();
     }
 
     public ControllerResponseStatus getStatus() {
@@ -323,11 +334,13 @@ public class SegmentCompletionProtocol {
       private ControllerResponseStatus _status;
       private long _offset;
       private long _buildTimeSec;
+      private boolean _isSplitCommit;
 
       public Params() {
         _offset = -1L;
         _status = ControllerResponseStatus.FAILED;
         _buildTimeSec = -1;
+        _isSplitCommit = false;
       }
 
       public Params withOffset(long offset) {
@@ -343,6 +356,11 @@ public class SegmentCompletionProtocol {
         return this;
       }
 
+      public Params withSplitCommit(boolean isSplitCommit) {
+        _isSplitCommit = isSplitCommit;
+        return this;
+      }
+
       public ControllerResponseStatus getStatus() {
         return _status;
       }
@@ -351,6 +369,10 @@ public class SegmentCompletionProtocol {
       }
       public long getBuildTimeSeconds() {
         return _buildTimeSec;
+      }
+
+      public boolean getIsSplitCommit() {
+        return _isSplitCommit;
       }
     }
   }
