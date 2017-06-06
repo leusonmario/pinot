@@ -46,9 +46,9 @@ public class LLCSegmentCommitUpload extends PinotSegmentUploadRestletResource {
 
   @Override
   @HttpVerb("post")
-  @Description("Uploads an LLC segment coming in from a server")
-  @Summary("Uploads an LLC segment coming in from a server")
-  @Paths({"/" + SegmentCompletionProtocol.MSG_TYPE_COMMIT})
+  @Description("Uploads an LLC segment using split commit")
+  @Summary("Uploads an LLC segment using split commit")
+  @Paths({"/" + SegmentCompletionProtocol.MSG_TYPE_SEGMENT_UPLOAD})
   public Representation post(Representation entity) {
     if (!extractParams()) {
       return new StringRepresentation(SegmentCompletionProtocol.RESP_FAILED.toJsonString());
@@ -58,7 +58,7 @@ public class LLCSegmentCommitUpload extends PinotSegmentUploadRestletResource {
     boolean success = uploadSegment(_instanceId, _segmentNameStr);
     if (success) {
       LOGGER.info("Uploded segment successfully");
-      return new StringRepresentation(SegmentCompletionProtocol.ControllerResponseStatus.COMMIT_SUCCESS.toString());
+      return new StringRepresentation(SegmentCompletionProtocol.ControllerResponseStatus.UPLOAD_SUCCESS.toString());
     } else {
       LOGGER.info("Failed to upload segment");
       return new StringRepresentation(SegmentCompletionProtocol.ControllerResponseStatus.FAILED.toString());
@@ -128,11 +128,14 @@ public class LLCSegmentCommitUpload extends PinotSegmentUploadRestletResource {
       // We will not check for quota here. Instead, committed segments will count towards the quota of a
       // table
       LLCSegmentName segmentName = new LLCSegmentName(segmentNameStr);
+      SegmentCompletionProtocol segmentCompletionProtocol = new SegmentCompletionProtocol();
+
       final String rawTableName = segmentName.getTableName();
       final File tableDir = new File(baseDataDir, rawTableName);
-      final File segmentFile = new File(tableDir, segmentNameStr + _offset + _instanceId);
+      segmentCompletionProtocol.setTableDir(tableDir.toString());
+      final File segmentFile = new File(tableDir, segmentCompletionProtocol.getSegmentFileName(segmentNameStr, _offset, _instanceId));
 
-      // always delte if there
+      // Always delete the segment file if it exists for split commit.
       if (segmentFile.exists()) {
         LOGGER.warn("Segment file {} exists. Replacing with upload from {}", segmentNameStr, instanceId);
         FileUtils.deleteQuietly(segmentFile);

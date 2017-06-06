@@ -21,6 +21,7 @@ import com.linkedin.pinot.common.restlet.swagger.HttpVerb;
 import com.linkedin.pinot.common.restlet.swagger.Paths;
 import com.linkedin.pinot.common.restlet.swagger.Summary;
 import com.linkedin.pinot.controller.helix.core.realtime.SegmentCompletionManager;
+import java.io.IOException;
 import org.restlet.representation.Representation;
 import org.restlet.representation.StringRepresentation;
 import org.restlet.resource.ServerResource;
@@ -35,13 +36,22 @@ public class LLCSegmentCommitStart extends ServerResource {
   String _instanceId;
 
   @HttpVerb("get")
-  @Description("Starts an LLC segment commit")
-  @Summary("Starts an LLC segment commit")
+  @Description("Starts an LLC segment commit using split commit")
+  @Summary("Starts an LLC segment commit using split commit")
   @Paths({"/" + SegmentCompletionProtocol.MSG_TYPE_COMMIT_START})
   public Representation get() {
-    if (!extractParams()) {
-      return new StringRepresentation(SegmentCompletionProtocol.RESP_FAILED.toJsonString());
+    try {
+      LLCSegmentBaseClass llcSegmentBaseClass = new LLCSegmentBaseClass();
+      if (!llcSegmentBaseClass.extractParams()) {
+        return new StringRepresentation(SegmentCompletionProtocol.RESP_FAILED.toJsonString());
+      }
+      _offset = llcSegmentBaseClass.getOffset();
+      _segmentNameStr = llcSegmentBaseClass.getSegmentNameStr();
+      _instanceId = llcSegmentBaseClass.getInstanceId();
+    } catch (Exception e) {
+      LOGGER.error("There was a problem initializing parameters");
     }
+
     LOGGER.info("segment={} offset={} instance={} ", _segmentNameStr, _offset, _instanceId);
 
     final SegmentCompletionProtocol.Request.Params reqParams = new SegmentCompletionProtocol.Request.Params();
@@ -55,25 +65,5 @@ public class LLCSegmentCommitStart extends ServerResource {
       LOGGER.info("Failure, response {}", response);
       return new StringRepresentation(response.getStatus().toString());
     }
-  }
-
-  boolean extractParams() {
-    final String offsetStr = getReference().getQueryAsForm().getValues(SegmentCompletionProtocol.PARAM_OFFSET);
-    final String segmentName = getReference().getQueryAsForm().getValues(SegmentCompletionProtocol.PARAM_SEGMENT_NAME);
-    final String instanceId = getReference().getQueryAsForm().getValues(SegmentCompletionProtocol.PARAM_INSTANCE_ID);
-
-    if (offsetStr == null || segmentName == null || instanceId == null) {
-      LOGGER.error("Invalid call: offset={}, segmentName={}, instanceId={}", offsetStr, segmentName, instanceId);
-      return false;
-    }
-    _segmentNameStr = segmentName;
-    _instanceId = instanceId;
-    try {
-      _offset = Long.valueOf(offsetStr);
-    } catch (NumberFormatException e) {
-      LOGGER.error("Invalid offset {} for segment {} from instance {}", offsetStr, segmentName, instanceId);
-      return false;
-    }
-    return true;
   }
 }

@@ -15,6 +15,7 @@
  */
 package com.linkedin.pinot.common.protocols;
 
+import java.io.File;
 import java.util.concurrent.TimeUnit;
 import com.alibaba.fastjson.JSONObject;
 
@@ -44,6 +45,7 @@ import com.alibaba.fastjson.JSONObject;
  */
 public class SegmentCompletionProtocol {
 
+  public String tableDirectory;
   /**
    * MAX_HOLD_TIME_MS is the maximum time (msecs) for which a server will be in HOLDING state, after which it will
    * send in a SegmentConsumedRequest with its current offset in kafka.
@@ -89,16 +91,20 @@ public class SegmentCompletionProtocol {
 
     /** Sent by controller as an acknowledgement to the SegmentStoppedConsuming message */
     PROCESSED,
+
+    /** Sent by controller as an acknowledgement during split commit for successful segment upload */
+    UPLOAD_SUCCESS,
   }
 
   public static final String STATUS_KEY = "status";
   public static final String OFFSET_KEY = "offset";
   public static final String BUILD_TIME_KEY = "buildTimeSec";  // Sent by controller in COMMIT message
-  public static final String COMMIT_TYPE_KEY = "commitType";
+  public static final String COMMIT_TYPE_KEY = "isSplitCommitType";
 
   public static final String MSG_TYPE_CONSUMED = "segmentConsumed";
   public static final String MSG_TYPE_COMMIT = "segmentCommit";
   public static final String MSG_TYPE_COMMIT_START = "segmentCommitStart";
+  public static final String MSG_TYPE_SEGMENT_UPLOAD = "segmentUpload";
   public static final String MSG_TYPE_COMMIT_END = "segmentCommitEnd";
   public static final String MSG_TYPE_STOPPED_CONSUMING = "segmentStoppedConsuming";
   public static final String MSG_TYPE_EXTEND_BUILD_TIME = "extendBuildTime";
@@ -130,6 +136,19 @@ public class SegmentCompletionProtocol {
       ControllerResponseStatus.PROCESSED));
   public static final Response RESP_NOT_SENT = new Response(new Response.Params().withStatus(
       ControllerResponseStatus.NOT_SENT));
+
+  // TODO: Find a better place for this method
+  public String getSegmentFileName(String segmentNameStr, long offset, String instanceId) {
+    return segmentNameStr + offset + instanceId;
+  }
+
+  public void setTableDir(String tableDirectory) {
+    this.tableDirectory = tableDirectory;
+  }
+
+  public File getTableDirectory() {
+    return new File(tableDirectory);
+  }
 
   public static long getMaxSegmentCommitTimeMs() {
     return MAX_SEGMENT_COMMIT_TIME_MS;
@@ -325,7 +344,7 @@ public class SegmentCompletionProtocol {
 
     public String toJsonString() {
       StringBuilder builder = new StringBuilder();
-      builder.append("{\"" + STATUS_KEY + "\":" + "\"" + _status.name() + "\"," + "\"" + OFFSET_KEY + "\":" + _offset);
+      builder.append("{\"" + STATUS_KEY + "\":" + "\"" + _status.name() + "\"," + "\"" + OFFSET_KEY + "\":" + _offset + ",\"" + COMMIT_TYPE_KEY + "\":" + _isSplitCommit);
       builder.append("}");
       return builder.toString();
     }
